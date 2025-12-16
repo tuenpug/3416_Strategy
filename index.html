@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3416 戰略指揮官 | V32</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', -apple-system, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        
+        .card { 
+            background: white; 
+            border-radius: 1.5rem; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02); 
+            border: 1px solid #f1f5f9; 
+        }
+        
+        input, select { 
+            background-color: #f1f5f9; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 0.75rem; 
+            transition: all 0.2s;
+            color: #0f172a;
+        }
+        input:focus, select:focus { 
+            border-color: #6366f1; 
+            background-color: #fff;
+            outline: none; 
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); 
+        }
+
+        .btn-press:active { transform: scale(0.97); transition: 0.1s; }
+        
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .dot-green { background-color: #10b981; box-shadow: 0 0 8px #10b981; }
+        .dot-red { background-color: #ef4444; }
+
+        .chart-glow { filter: drop-shadow(0 10px 8px rgba(0,0,0,0.05)); }
+        
+        .mode-active-buy { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border: none; }
+        .mode-active-sell { background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); color: white; border: none; }
+        .mode-inactive { background: #f1f5f9; color: #94a3b8; }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #ef4444;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            padding: 5px;
+            margin-right: -5px;
+        }
+        .delete-btn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .chart-toggle-btn {
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 9999px;
+            transition: all 0.2s;
+        }
+        .chart-toggle-active {
+            background-color: #6366f1;
+            color: white;
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+        }
+        .chart-toggle-inactive {
+            background-color: #e2e8f0;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body class="pb-12">
+
+    <div class="bg-white/80 backdrop-blur px-5 py-3 flex justify-between items-center sticky top-0 z-50 border-b border-slate-100">
+        <div>
+            <h1 class="text-lg font-black tracking-tight text-slate-800">3416 指揮官</h1>
+            <p class="text-[10px] text-indigo-500 font-bold tracking-widest">V32 UI OPTIMIZED</p>
+        </div>
+        <div class="flex flex-col items-end">
+            <div class="flex items-center gap-2">
+                <span id="syncDot" class="dot dot-red"></span>
+                <span id="syncStatus" class="text-xs font-bold text-slate-400">連線中...</span>
+            </div>
+            <span id="lastSyncTime" class="text-[10px] text-slate-300 mono mt-0.5">--:--</span>
+        </div>
+    </div>
+
+    <div class="max-w-md mx-auto p-4 space-y-4">
+        
+        <div class="card p-6 text-center bg-gradient-to-b from-white to-slate-50">
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">總資產淨值</p>
+            <div class="flex justify-center items-baseline gap-2 mb-6">
+                <h2 id="totalEquity" class="text-5xl font-black text-slate-800 mono tracking-tighter drop-shadow-sm">$1,000,000</h2>
+                <span id="totalRoi" class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-xs font-bold">+0.0%</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase">可用現金</p>
+                    <p id="cashBal" class="text-lg font-bold text-slate-700 mono">$1,000,000</p>
+                </div>
+                <div class="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                    <p class="text-[10px] text-yellow-500 font-bold uppercase">累積收息</p>
+                    <p id="totalDividends" class="text-lg font-bold text-yellow-600 mono">$0</p>
+                </div>
+                <div class="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                    <p class="text-[10px] text-orange-500 font-bold uppercase">波幅淨利</p>
+                    <p id="swingProfit" class="text-lg font-bold text-orange-600 mono">$0</p>
+                </div>
+                <div class="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                    <p class="text-[10px] text-rose-500 font-bold uppercase">撈底淨利</p>
+                    <p id="bottomProfit" class="text-lg font-bold text-rose-600 mono">$0</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex flex-col items-center">
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 w-full text-left">資產配置分佈</h3>
+                
+                <div class="relative w-48 h-48 mb-4 chart-glow">
+                    <canvas id="allocChart"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span class="text-xs font-bold text-slate-300">ASSET</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 w-full">
+                    <div class="text-center p-2 rounded-xl bg-blue-50 border border-blue-100">
+                        <span class="block text-[10px] font-bold text-blue-400 uppercase">長線核心</span>
+                        <span id="v1_label" class="block text-sm font-black text-blue-600 mono">0%</span>
+                    </div>
+                    <div class="text-center p-2 rounded-xl bg-orange-50 border border-orange-100">
+                        <span class="block text-[10px] font-bold text-orange-400 uppercase">波幅短線</span>
+                        <span id="v2_label" class="block text-sm font-black text-orange-600 mono">0%</span>
+                    </div>
+                    <div class="text-center p-2 rounded-xl bg-rose-50 border border-rose-100">
+                        <span class="block text-[10px] font-bold text-rose-400 uppercase">低位撈底</span>
+                        <span id="v3_label" class="block text-sm font-black text-rose-600 mono">0%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card p-5 border-l-4 border-l-indigo-500 bg-white">
+            <div class="flex justify-between items-start mb-1">
+                <span class="text-[10px] font-bold text-slate-400 uppercase">AI 息率評估</span>
+                <span id="yieldValue" class="text-xl font-black text-indigo-600 mono">--%</span>
+            </div>
+            <h3 id="adviceSignal" class="text-md font-bold text-slate-800">等待數據...</h3>
+            <p id="adviceDesc" class="text-xs text-slate-500 mt-1">分析中...</p>
+            
+            <div class="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+                <div class="flex items-center gap-1">
+                    <span class="text-[10px] font-bold text-slate-400">派息日設定:</span>
+                    <select id="divDaySelect" onchange="updateUI()" class="py-0 px-2 text-xs font-bold bg-slate-100 border-none rounded">
+                        </select>
+                </div>
+                <span id="countdown" class="text-xs font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded">剩餘 -- 天</span>
+            </div>
+        </div>
+        
+        <div class="card p-6 relative overflow-hidden">
+            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest">交易控制台</h3>
+
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <button id="buyModeBtn" onclick="switchMode('BUY')" class="py-3 rounded-xl font-bold text-sm transition btn-press mode-active-buy shadow-lg shadow-slate-200">買入 (BUY)</button>
+                <button id="sellModeBtn" onclick="switchMode('SELL')" class="py-3 rounded-xl font-bold text-sm transition btn-press mode-inactive">沽出 (SELL)</button>
+            </div>
+
+            <div class="space-y-3 mb-4">
+                <select id="bucket" onchange="updateUI()" class="w-full p-3 font-bold text-sm bg-white border-2 border-slate-100 focus:border-indigo-500">
+                    <option value="longTerm">🔵 長線核心 (40%)</option>
+                    <option value="swing">🟠 波幅短線 (30%)</option>
+                    <option value="bottom">🔴 低位撈底 (30%)</option>
+                </select>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">市價 (HKD)</label>
+                        <div class="flex">
+                            <input type="number" id="price" value="10.50" step="0.01" oninput="updateUI()" class="w-full font-black mono text-slate-800 p-2 text-center text-lg">
+                            <button onclick="syncMarket(true)" class="ml-1 text-indigo-500 p-2 font-bold">↻</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">月息 (HKD)</label>
+                        <input type="number" id="divSetting" value="0.140" step="0.001" oninput="updateUI()" class="w-full font-black mono text-emerald-600 p-2 text-center text-lg bg-emerald-50/50 border-emerald-100">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100 mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase">股數</label>
+                    <span id="avgCostDisplay" class="text-[9px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded shadow-sm">均價: $0.00</span>
+                </div>
+                
+                <div class="relative mb-3">
+                    <input type="number" id="shares" value="1000" oninput="updateUI()" class="w-full text-3xl font-black mono text-center text-slate-800 bg-white py-3 border border-slate-200 rounded-xl focus:border-slate-800 shadow-inner">
+                    <button onclick="setMax()" class="absolute right-2 top-2 bg-slate-200 text-slate-600 hover:bg-slate-300 text-[9px] font-bold px-2 py-1 rounded transition">MAX</button>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-40-0 font-bold text-xs">總金額</span>
+                        <span id="estAmount" class="font-black mono text-slate-700">$0</span>
+                    </div>
+                    
+                    <div id="limitRow" class="flex justify-between items-center p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-800">
+                        <span class="text-xs font-bold flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            份額剩餘額度
+                        </span>
+                        <span id="bucketLimit" class="font-black mono text-md">+$400,000</span>
+                    </div>
+
+                    <div id="projectedDivRow" class="flex justify-between items-center p-2 rounded-lg bg-emerald-100/50 border border-emerald-100 text-emerald-800">
+                        <span class="text-xs font-bold flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            預計每月增收
+                        </span>
+                        <span id="projectedDiv" class="font-black mono text-md">+$0</span>
+                    </div>
+
+                    <div id="profitIndicator" class="hidden flex justify-between items-center p-2 rounded-lg text-sm">
+                        <span class="font-bold text-xs">帳面回報</span>
+                        <span id="profitPct" class="font-black mono text-md">0.00%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-4 gap-2">
+                <button onclick="execute()" id="execBtn" class="col-span-3 py-4 bg-slate-800 text-white rounded-xl font-bold text-md shadow-lg shadow-slate-300/50 btn-press">確認交易</button>
+                <button onclick="collectDiv()" class="col-span-1 bg-amber-400 text-amber-950 rounded-xl font-bold text-xs flex flex-col items-center justify-center shadow-lg shadow-amber-200 btn-press">
+                    <span class="text-lg">💰</span>
+                    收息
+                </button>
+            </div>
+        </div>
+        <div class="card p-5">
+            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest">份額持倉概況 (基於市價)</h3>
+            <div class="space-y-3">
+                <div id="longTermStats" class="p-3 rounded-xl bg-blue-50 border border-blue-100 flex justify-between items-center">
+                    <div>
+                        <span class="block text-[10px] font-bold text-blue-500 uppercase">🔵 長線核心 (40%)</span>
+                        <span class="block text-xs text-blue-400">均價: <span id="longTermAvg" class="font-bold mono">0.00</span> | 持倉: <span id="longTermShares" class="font-bold mono">0</span>股</span>
+                    </div>
+                    <div class="text-right">
+                        <span id="longTermPL" class="block text-sm font-black text-slate-800 mono">+$0</span>
+                        <span id="longTermPLPct" class="block text-[10px] font-bold text-slate-600">0.00%</span>
+                    </div>
+                </div>
+                <div id="swingStats" class="p-3 rounded-xl bg-orange-50 border border-orange-100 flex justify-between items-center">
+                    <div>
+                        <span class="block text-[10px] font-bold text-orange-500 uppercase">🟠 波幅短線 (30%)</span>
+                        <span class="block text-xs text-orange-400">均價: <span id="swingAvg" class="font-bold mono">0.00</span> | 持倉: <span id="swingShares" class="font-bold mono">0</span>股</span>
+                    </div>
+                    <div class="text-right">
+                        <span id="swingPL" class="block text-sm font-black text-slate-800 mono">+$0</span>
+                        <span id="swingPLPct" class="block text-[10px] font-bold text-slate-600">0.00%</span>
+                    </div>
+                </div>
+                <div id="bottomStats" class="p-3 rounded-xl bg-rose-50 border border-rose-100 flex justify-between items-center">
+                    <div>
+                        <span class="block text-[10px] font-bold text-rose-500 uppercase">🔴 低位撈底 (30%)</span>
+                        <span class="block text-xs text-rose-400">均價: <span id="bottomAvg" class="font-bold mono">0.00</span> | 持倉: <span id="bottomShares" class="font-bold mono">0</span>股</span>
+                    </div>
+                    <div class="text-right">
+                        <span id="bottomPL" class="block text-sm font-black text-slate-800 mono">+$0</span>
+                        <span id="bottomPLPct" class="block text-[10px] font-bold text-slate-600">0.00%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card p-5">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">總資產淨值走勢</h3>
+                <div class="flex gap-2">
+                    <button id="toggleMonthly" onclick="renderPerformanceChart('monthly')" class="chart-toggle-btn chart-toggle-active">月度</button>
+                    <button id="toggleYearly" onclick="renderPerformanceChart('yearly')" class="chart-toggle-btn chart-toggle-inactive">年度</button>
+                </div>
+            </div>
+            <div style="height: 200px;">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card overflow-hidden">
+            <div class="bg-slate-50 px-5 py-3 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">交易日誌</h3>
+                <button onclick="resetData()" class="text-[10px] text-rose-400 font-bold hover:text-rose-600">重置</button>
+            </div>
+            <div id="logBody" class="max-h-40 overflow-y-auto divide-y divide-slate-50"></div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = '3416_v31_hold_control'; // 雖然是 V32，但保持 KEY 不變以繼承數據
+        const TOTAL_CAPITAL = 1000000;
+        const RATIOS = { longTerm: 0.40, swing: 0.30, bottom: 0.30 };
+        const NAMES = { longTerm: '長線', swing: '波幅', bottom: '撈底' };
+        
+        const INITIAL_PRICE = 10.50; 
+        const INITIAL_DIV = 0.140;
+
+        let currentMode = 'BUY';
+        let allocChart = null;
+        let performanceChart = null;
+        let currentChartMode = 'monthly';
+        
+        const DEFAULT_STATE = {
+            cash: TOTAL_CAPITAL,
+            holding: { longTerm: 0, swing: 0, bottom: 0 },
+            used: { longTerm: 0, swing: 0, bottom: 0 },
+            logs: [],
+            totalDividends: 0, 
+            divDay: 7, 
+            swingProfit: 0,
+            bottomProfit: 0,
+            performanceHistory: [{ date: new Date().toISOString().substring(0, 10), equity: TOTAL_CAPITAL }]
+        };
+        
+        let state = {};
+
+        try {
+            const storedState = JSON.parse(localStorage.getItem(STORAGE_KEY));
+            if (storedState) {
+                // 確保所有新屬性存在，並處理舊數據遷移
+                if (!storedState.performanceHistory || storedState.performanceHistory.length === 0) {
+                     storedState.performanceHistory = DEFAULT_STATE.performanceHistory;
+                }
+                if (storedState.divDay === undefined) storedState.divDay = DEFAULT_STATE.divDay; 
+                if (storedState.used === undefined) storedState.used = DEFAULT_STATE.used; 
+                if (storedState.swingProfit === undefined) storedState.swingProfit = 0;
+                if (storedState.bottomProfit === undefined) storedState.bottomProfit = 0;
+
+                state = storedState;
+            } else { state = DEFAULT_STATE; }
+        } catch (e) { 
+            console.error("Failed to load state, resetting to default:", e);
+            state = DEFAULT_STATE; 
+        }
+
+        // --- 核心工具函數 ---
+        function calculateCurrentEquity() {
+            const p = parseFloat(document.getElementById('price').value) || 0;
+            return state.cash + (state.holding.longTerm + state.holding.swing + state.holding.bottom) * p;
+        }
+        
+        function getAvgCost(bucket) {
+             return state.holding[bucket] > 0 ? state.used[bucket] / state.holding[bucket] : 0;
+        }
+
+        // --- 自動同步市價 (保持不變) ---
+        async function syncMarket(isManual = false) {
+            const statusEl = document.getElementById('syncStatus');
+            const dot = document.getElementById('syncDot');
+            const priceEl = document.getElementById('price');
+            
+            if (!isManual) {
+                priceEl.value = INITIAL_PRICE.toFixed(2);
+                document.getElementById('divSetting').value = INITIAL_DIV.toFixed(3);
+                updateUI();
+            }
+            
+            statusEl.innerText = "更新中...";
+            statusEl.className = "text-xs font-bold text-slate-400";
+            dot.className = "dot dot-red";
+
+            try {
+                // 模擬 API 呼叫，實際部署時請替換為真實的 API 接口
+                // 模擬市價波動
+                const marketPrice = INITIAL_PRICE * (1 + (Math.random() - 0.5) * 0.1); 
+
+                if (marketPrice > 0) {
+                    priceEl.value = marketPrice.toFixed(2);
+                    document.getElementById('lastSyncTime').innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    statusEl.innerText = "已連線 (自動)";
+                    statusEl.className = "text-xs font-bold text-emerald-600";
+                    dot.className = "dot dot-green";
+                } else {
+                    throw new Error("Invalid Price");
+                }
+                
+            } catch (e) { 
+                statusEl.innerText = "手動/離線";
+                statusEl.className = "text-xs font-bold text-slate-400";
+                dot.className = "dot dot-red";
+                if (!priceEl.value || isManual) priceEl.value = INITIAL_PRICE.toFixed(2); 
+            }
+            
+            updateUI();
+        }
+
+        // --- V31: 更新份額概況 (盈虧) (保持不變) ---
+        function updateBucketStats() {
+            const p = parseFloat(document.getElementById('price').value) || 0;
+
+            ['longTerm', 'swing', 'bottom'].forEach(bucket => {
+                const avg = getAvgCost(bucket);
+                const shares = state.holding[bucket];
+                
+                document.getElementById(`${bucket}Avg`).innerText = avg.toFixed(2);
+                document.getElementById(`${bucket}Shares`).innerText = shares.toLocaleString();
+
+                const cost = state.used[bucket];
+                const marketValue = shares * p;
+                const pl = marketValue - cost;
+                const plPct = cost > 0 ? (pl / cost) * 100 : 0;
+
+                const plEl = document.getElementById(`${bucket}PL`);
+                const plPctEl = document.getElementById(`${bucket}PLPct`);
+                const cardEl = document.getElementById(`${bucket}Stats`);
+                const titleColor = bucket === 'longTerm' ? 'text-blue-500' : bucket === 'swing' ? 'text-orange-500' : 'text-rose-500';
+                const textColor = bucket === 'longTerm' ? 'text-blue-400' : bucket === 'swing' ? 'text-orange-400' : 'text-rose-400';
+
+                plEl.innerText = (pl >= 0 ? "+" : "") + Math.round(pl).toLocaleString();
+                plPctEl.innerText = (plPct >= 0 ? "+" : "") + plPct.toFixed(2) + "%";
+
+                if (pl >= 0) {
+                    plEl.className = 'block text-sm font-black text-emerald-600 mono';
+                    plPctEl.className = 'block text-[10px] font-bold text-emerald-500';
+                    cardEl.style.backgroundColor = bucket === 'longTerm' ? '#eff6ff' : bucket === 'swing' ? '#fff7ed' : '#fef2f2'; 
+                    cardEl.style.borderColor = bucket === 'longTerm' ? '#bfdbfe' : bucket === 'swing' ? '#fed7aa' : '#fecaca'; 
+                } else {
+                    plEl.className = 'block text-sm font-black text-rose-600 mono';
+                    plPctEl.className = 'block text-[10px] font-bold text-rose-500';
+                    cardEl.style.backgroundColor = bucket === 'longTerm' ? '#f0f4ff' : bucket === 'swing' ? '#fff0e5' : '#feebeb'; 
+                    cardEl.style.borderColor = bucket === 'longTerm' ? '#d7e2ff' : bucket === 'swing' ? '#ffdfc5' : '#ffc0c0'; 
+                }
+
+                // 重新設置標題顏色以避免被上面的邏輯覆蓋
+                cardEl.querySelector('.uppercase').className = `block text-[10px] font-bold ${titleColor} uppercase`;
+                cardEl.querySelector('.text-xs').className = `block text-xs ${textColor}`;
+
+
+            });
+        }
+
+
+        // --- UI 和數據處理 (保持不變) ---
+        function updateUI() {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+            
+            const p = parseFloat(document.getElementById('price').value) || 0;
+            const div = parseFloat(document.getElementById('divSetting').value) || 0;
+            const bucket = document.getElementById('bucket').value;
+            const sharesInput = parseInt(document.getElementById('shares').value) || 0;
+            
+            recordPerformance();
+            
+            const totalEq = calculateCurrentEquity();
+            const yieldVal = p > 0 ? (div * 12 / p * 100) : 0;
+
+            const currentAvg = getAvgCost(bucket);
+            document.getElementById('avgCostDisplay').innerText = `均價: $${currentAvg.toFixed(2)}`;
+            
+            // V31: 份額額度計算
+            const bucketLimit = TOTAL_CAPITAL * RATIOS[bucket];
+            const remainingLimit = Math.max(0, bucketLimit - state.used[bucket]);
+            
+            const limitRow = document.getElementById('limitRow');
+            const projectedDivRow = document.getElementById('projectedDivRow');
+            const profitIndicator = document.getElementById('profitIndicator');
+
+            if (currentMode === 'BUY') {
+                limitRow.classList.remove('hidden');
+                projectedDivRow.classList.remove('hidden');
+                profitIndicator.classList.add('hidden');
+                
+                document.getElementById('bucketLimit').innerText = `+$${Math.round(remainingLimit).toLocaleString()}`;
+                
+                const addedMonthlyInterest = sharesInput * div;
+                document.getElementById('projectedDiv').innerText = `+$${Math.round(addedMonthlyInterest).toLocaleString()}`;
+            } else { // SELL Mode
+                limitRow.classList.add('hidden');
+                projectedDivRow.classList.add('hidden');
+                
+                if (currentAvg > 0 && p > 0) {
+                    profitIndicator.classList.remove('hidden');
+                    const pct = ((p - currentAvg) / currentAvg) * 100;
+                    profitIndicator.className = `flex justify-between items-center p-2 rounded-lg text-sm ${pct >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
+                    document.getElementById('profitPct').innerText = (pct > 0 ? "+" : "") + pct.toFixed(2) + "%";
+                } else { profitIndicator.classList.add('hidden'); }
+            }
+
+            document.getElementById('totalEquity').innerText = "$" + Math.round(totalEq).toLocaleString();
+            const roi = ((totalEq - TOTAL_CAPITAL) / TOTAL_CAPITAL) * 100;
+            document.getElementById('totalRoi').innerText = (roi >= 0 ? "+" : "") + roi.toFixed(1) + "%";
+            document.getElementById('totalRoi').className = `bg-${roi >= 0 ? 'emerald' : 'rose'}-100 text-${roi >= 0 ? 'emerald' : 'rose'}-700 px-2 py-1 rounded-md text-xs font-bold`;
+
+            document.getElementById('cashBal').innerText = "$" + Math.round(state.cash).toLocaleString();
+            document.getElementById('totalDividends').innerText = "$" + Math.round(state.totalDividends).toLocaleString();
+            document.getElementById('swingProfit').innerText = "$" + Math.round(state.swingProfit).toLocaleString();
+            document.getElementById('bottomProfit').innerText = "$" + Math.round(state.bottomProfit).toLocaleString();
+            
+            updateBucketStats(); // V31: 更新份額盈虧
+
+            const signal = document.getElementById('adviceSignal');
+            const desc = document.getElementById('adviceDesc');
+            document.getElementById('yieldValue').innerText = yieldVal.toFixed(1) + "%";
+            if (yieldVal >= 16) {
+                signal.innerText = "🚀 撈底機會 (息率極高)"; signal.className = "text-md font-bold text-rose-600";
+                desc.innerText = "建議：動用紅色份額進場。";
+            } else if (yieldVal >= 14) {
+                signal.innerText = "📈 價值區間 (適宜長線)"; signal.className = "text-md font-bold text-blue-600";
+                desc.innerText = "建議：累積藍色長線核心。";
+            } else {
+                signal.innerText = "🛡️ 觀察/防守 (息率一般)"; signal.className = "text-md font-bold text-orange-600";
+                desc.innerText = "建議：利用橙色份額做波段。";
+            }
+
+            const sel = document.getElementById('divDaySelect');
+            if (sel.value) state.divDay = parseInt(sel.value);
+            const today = new Date();
+            let nextDate = new Date(today.getFullYear(), today.getMonth(), state.divDay);
+            if (today.getDate() >= state.divDay) nextDate.setMonth(today.getMonth() + 1);
+            const daysLeft = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
+            document.getElementById('countdown').innerText = "倒數 " + daysLeft + " 天";
+
+            if (allocChart) {
+                allocChart.data.datasets[0].data = [state.holding.longTerm*p, state.holding.swing*p, state.holding.bottom*p, state.cash];
+                allocChart.update();
+            }
+            
+            const calcPct = (val) => totalEq > 0 ? ((val*p/totalEq)*100).toFixed(0) + "%" : "0%";
+            document.getElementById('v1_label').innerText = calcPct(state.holding.longTerm);
+            document.getElementById('v2_label').innerText = calcPct(state.holding.swing);
+            document.getElementById('v3_label').innerText = calcPct(state.holding.bottom);
+            document.getElementById('estAmount').innerText = "$" + Math.round(p * sharesInput).toLocaleString();
+
+            renderLogs();
+            renderPerformanceChart(); 
+        }
+
+        // --- 交易邏輯 (保持不變) ---
+        function execute() {
+            const p = parseFloat(document.getElementById('price').value);
+            const s = parseInt(document.getElementById('shares').value);
+            const b = document.getElementById('bucket').value;
+            const amt = p * s;
+            if (s <= 0 || p <= 0) return alert("請輸入有效的股數和市價");
+
+            if (currentMode === 'BUY') {
+                const bucketLimit = TOTAL_CAPITAL * RATIOS[b];
+                const newUsed = state.used[b] + amt;
+
+                // V31: 限額鎖定邏輯
+                if (state.cash < amt) return alert("現金不足。");
+                if (newUsed > bucketLimit) return alert(`份額超額！${NAMES[b]} 的總投資上限為 $${bucketLimit.toLocaleString()}，當前操作將超額 $${Math.round(newUsed - bucketLimit).toLocaleString()}。`);
+                
+                state.cash -= amt; 
+                state.holding[b] += s; 
+                state.used[b] += amt;
+                log(`買入 ${s}股 [${NAMES[b]}]`, -amt, 'BUY', b, s, p);
+            } else {
+                if (state.holding[b] < s) return alert("持倉不足");
+                const avg = getAvgCost(b);
+                const cost = avg * s;
+                const profit = amt - cost;
+                
+                state.cash += amt; 
+                state.holding[b] -= s; 
+                state.used[b] = Math.max(0, state.used[b] - cost);
+                
+                if (b === 'swing') state.swingProfit += profit;
+                if (b === 'bottom') state.bottomProfit += profit;
+                
+                log(`沽出 ${s}股 [${NAMES[b]}]`, amt, 'SELL', b, s, p, avg);
+            }
+            updateUI();
+        }
+
+        function setMax() {
+            const p = parseFloat(document.getElementById('price').value) || 0;
+            if (p <= 0) return;
+            
+            const b = document.getElementById('bucket').value;
+            let maxShares;
+
+            if (currentMode === 'BUY') {
+                const bucketLimit = TOTAL_CAPITAL * RATIOS[b];
+                const remainingLimit = Math.max(0, bucketLimit - state.used[b]);
+                
+                // 可用資金是現金和份額剩餘額度中的最小值 (V31 核心限制)
+                const canSpend = Math.min(remainingLimit, state.cash);
+                
+                maxShares = Math.floor(canSpend / p);
+                
+            } else {
+                maxShares = state.holding[b];
+            }
+            document.getElementById('shares').value = Math.max(0, maxShares);
+            updateUI();
+        }
+
+        function recordPerformance() {
+            const currentDate = new Date().toISOString().substring(0, 10); 
+            const currentEquity = Math.round(calculateCurrentEquity());
+            
+            const lastRecord = state.performanceHistory[state.performanceHistory.length - 1];
+
+            if (lastRecord.date !== currentDate || Math.abs(lastRecord.equity - currentEquity) > 1000) {
+                if (lastRecord.date === currentDate) {
+                    lastRecord.equity = currentEquity;
+                } else {
+                    state.performanceHistory.push({ date: currentDate, equity: currentEquity });
+                    if (state.performanceHistory.length > 100) state.performanceHistory.shift(); 
+                }
+            }
+        }
+
+        function renderPerformanceChart(mode = currentChartMode) {
+            currentChartMode = mode;
+            document.getElementById('toggleMonthly').className = `chart-toggle-btn ${mode === 'monthly' ? 'chart-toggle-active' : 'chart-toggle-inactive'}`;
+            document.getElementById('toggleYearly').className = `chart-toggle-btn ${mode === 'yearly' ? 'chart-toggle-active' : 'chart-toggle-inactive'}`;
+
+            let filteredData = state.performanceHistory;
+            let labels = filteredData.map(d => d.date);
+            let equities = filteredData.map(d => d.equity);
+
+            if (mode === 'monthly') {
+                filteredData = state.performanceHistory.slice(-30);
+                labels = filteredData.map(d => d.date.substring(5)); 
+            } else if (mode === 'yearly') {
+                labels = filteredData.map(d => d.date.substring(0, 7)); 
+            }
+
+            if (performanceChart) {
+                performanceChart.data.labels = labels;
+                performanceChart.data.datasets[0].data = equities;
+                performanceChart.update();
+                return;
+            }
+
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '總資產淨值',
+                        data: equities,
+                        borderColor: '#6366f1', 
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        fill: 'start', 
+                        tension: 0.4, 
+                        pointRadius: 3,
+                        pointBackgroundColor: '#6366f1',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        x: { display: true, title: { display: true, text: '日期', color: '#64748b' } },
+                        y: { 
+                            display: true, 
+                            title: { display: true, text: '淨值 (HKD)', color: '#64748b' },
+                            ticks: { callback: (val) => '$' + (val / 1000).toFixed(0) + 'K' } 
+                        }
+                    }
+                }
+            });
+        }
+
+        function log(msg, amt, type, bucket, shares, price, avg=0) {
+            const time = new Date();
+            const dateStr = `${time.getMonth()+1}/${time.getDate()}`;
+            const newLog = { id: Date.now(), date: dateStr, msg, amt, type, bucket, shares, price, avg };
+            state.logs.unshift(newLog);
+            if (state.logs.length > 50) state.logs.pop();
+        }
+
+        function deleteLog(id) {
+            const index = state.logs.findIndex(l => l.id === id);
+            if (index === -1) return;
+            
+            const logEntry = state.logs[index];
+
+            if (!confirm(`確定刪除此記錄？\n[${logEntry.date}] ${logEntry.msg}`)) return;
+
+            if (logEntry.type === 'BUY') {
+                state.cash += logEntry.shares * logEntry.price;
+                state.holding[logEntry.bucket] -= logEntry.shares;
+                state.used[logEntry.bucket] -= logEntry.shares * logEntry.price;
+            } else if (logEntry.type === 'SELL') {
+                const cost = logEntry.shares * logEntry.avg;
+                const profit = (logEntry.shares * logEntry.price) - cost;
+                
+                state.cash -= logEntry.shares * logEntry.price;
+                state.holding[logEntry.bucket] += logEntry.shares;
+                state.used[logEntry.bucket] += cost;
+
+                if (logEntry.bucket === 'swing') state.swingProfit -= profit;
+                if (logEntry.bucket === 'bottom') state.bottomProfit -= profit;
+
+            } else if (logEntry.type === 'DIV') {
+                state.cash -= logEntry.amt;
+                state.totalDividends -= logEntry.amt;
+            }
+
+            state.holding[logEntry.bucket] = Math.max(0, state.holding[logEntry.bucket] || 0);
+            state.used[logEntry.bucket] = Math.max(0, state.used[logEntry.bucket] || 0);
+
+            state.logs.splice(index, 1);
+            
+            alert("記錄已刪除，帳戶數據已還原！");
+            updateUI();
+        }
+
+
+        function renderLogs() {
+            document.getElementById('logBody').innerHTML = state.logs.map(l => `
+                <div class="px-5 py-2 flex justify-between items-center hover:bg-slate-50 transition group">
+                    <div class="flex-1">
+                        <span class="block text-xs font-bold text-slate-700">${l.msg}</span>
+                        <span class="text-[10px] text-slate-400 mono">${l.date}</span>
+                    </div>
+                    <span class="font-bold mono text-sm ${l.amt>=0 ? 'text-emerald-600' : 'text-slate-800'} mr-4">
+                        ${l.amt>=0?'+':''}${Math.round(l.amt).toLocaleString()}
+                    </span>
+                    <button onclick="deleteLog(${l.id})" class="delete-btn">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function collectDiv() {
+            const div = parseFloat(document.getElementById('divSetting').value);
+            const totalS = state.holding.longTerm + state.holding.swing + state.holding.bottom;
+            if (totalS <= 0) return alert("無持倉");
+            const earned = div * totalS;
+            state.cash += earned; state.totalDividends += earned;
+            log(`收取股息`, earned, 'DIV', 'N/A', 0, 0); 
+            updateUI();
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            const buyBtn = document.getElementById('buyModeBtn');
+            const sellBtn = document.getElementById('sellModeBtn');
+            const execBtn = document.getElementById('execBtn');
+            
+            if (mode === 'BUY') {
+                buyBtn.className = "py-3 rounded-xl font-bold text-sm transition btn-press mode-active-buy shadow-lg shadow-slate-200";
+                sellBtn.className = "py-3 rounded-xl font-bold text-sm transition btn-press mode-inactive";
+                execBtn.innerText = "確認買入 (BUY)";
+                execBtn.className = "col-span-3 py-4 bg-slate-800 text-white rounded-xl font-bold text-md shadow-lg shadow-slate-300/50 btn-press";
+            } else {
+                buyBtn.className = "py-3 rounded-xl font-bold text-sm transition btn-press mode-inactive";
+                sellBtn.className = "py-3 rounded-xl font-bold text-sm transition btn-press mode-active-sell shadow-lg shadow-rose-200";
+                execBtn.innerText = "確認沽出 (SELL)";
+                execBtn.className = "col-span-3 py-4 bg-rose-600 text-white rounded-xl font-bold text-md shadow-lg shadow-rose-300/50 btn-press";
+            }
+            updateUI();
+        }
+
+        function resetData() { 
+            if(confirm("重置將清除所有資料，確定？")) { 
+                localStorage.removeItem(STORAGE_KEY); 
+                location.reload(); 
+            } 
+        }
+
+        function initDivSelector() {
+            const s = document.getElementById('divDaySelect');
+            for(let i=1; i<=28; i++) s.innerHTML += `<option value="${i}">${i}號</option>`;
+            s.value = state.divDay || 7; 
+        }
+
+        function getGradient(ctx, chartArea, colorStart, colorEnd) {
+            const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+            gradient.addColorStop(0, colorStart);
+            gradient.addColorStop(1, colorEnd);
+            return gradient;
+        }
+
+        window.onload = () => {
+            initDivSelector();
+            
+            const ctx = document.getElementById('allocChart').getContext('2d');
+            
+            const chartData = {
+                labels: ['長線','波幅','撈底','現金'],
+                datasets: [{ 
+                    data: [0,0,0,100], 
+                    backgroundColor: function(context) {
+                        const chart = context.chart;
+                        const {ctx, chartArea} = chart;
+                        if (!chartArea) return null;
+                        
+                        if (context.dataIndex === 0) return getGradient(ctx, chartArea, '#2563eb', '#60a5fa'); 
+                        if (context.dataIndex === 1) return getGradient(ctx, chartArea, '#ea580c', '#fb923c'); 
+                        if (context.dataIndex === 2) return getGradient(ctx, chartArea, '#e11d48', '#f43f5e'); 
+                        return '#f1f5f9';
+                    },
+                    borderWidth: 0,
+                    hoverOffset: 15, 
+                    borderRadius: 5  
+                }] 
+            };
+
+            allocChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: chartData,
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    cutout: '75%', 
+                    layout: { padding: 10 },
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } } 
+                }
+            });
+            
+            renderPerformanceChart(currentChartMode); 
+            
+            syncMarket(); 
+            setInterval(syncMarket, 60000);
+        };
+    </script>
+</body>
+</html>
+
